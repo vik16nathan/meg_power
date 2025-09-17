@@ -9,4 +9,4 @@ The code is grouped into the following sections:
 - _phantom_: physical phantom analyses (fig. 2)
 - _cell_res_: dendrite-derived resistance calculations in each parcel of the brain (fig. 2D)
 - _secondary_p_: code to simulate secondary currents at every point in an FEM mesh before subsequently calculating power (fig. 3)
-- _metabolism_correlations_: code to calculate S600-parcellated power's correlation with glucose/oxygen/biologically-defined metabolism (fig. 4)
+- _metabolism_correlations_: code to calculate S600-parcellated power's correlation with glucose/oxygen/biologically-defined metabolism (fig. 4/5)
