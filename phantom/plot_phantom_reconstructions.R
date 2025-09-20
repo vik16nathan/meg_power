@@ -10,7 +10,7 @@ df <- data.frame(
 )
 
 # Add a row label to use on x-axis
-df$Label <- paste(df$Phantom, df$Dipole_nAm, "nA.m")
+df$Label <- paste(df$Dipole_nAm, "nA.m")
 
 # Plot
 p <- ggplot(df, aes(x = Label, y = Sum_of_MNE_nAm, fill = Phantom)) +
@@ -23,10 +23,14 @@ p <- ggplot(df, aes(x = Label, y = Sum_of_MNE_nAm, fill = Phantom)) +
                    xend = as.numeric(factor(Label)) + 0.3,
                    y = Dipole_nAm, yend = Dipole_nAm),
                color = "red", size = 1.2) +
+  # Make labels bigger
   geom_text(aes(label = sprintf("%.2f", Sum_of_MNE_nAm)),
-            vjust = -0.5, size = 5) +
-  labs(x = "Phantom & Dipole (nA.m)",
+            vjust = -0.5, size = 8) +   # increased size
+  labs(x = "Dipole (nA.m)",
        y = "Sum of MNE (nA.m)") +
-  theme_minimal(base_size = 24)
+  theme_minimal(base_size = 26) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)  # diagonal x-axis ticks
+  )
 
 print(p)
