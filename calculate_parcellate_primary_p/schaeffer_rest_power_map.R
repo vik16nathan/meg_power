@@ -21,13 +21,10 @@ custom_sort <- function(schaefer7_sort) {
   min_len <- min(length(lh_strings), length(rh_strings))
   
   result <- c()
-  
   for (i in 1:min_len) {
     result <- c(result, lh_strings[i], rh_strings[i])
   }
-  
   result <- c(result, lh_strings[(min_len + 1):length(lh_strings)], rh_strings[(min_len + 1):length(rh_strings)])
-  
   return(result)
 }
 
@@ -36,54 +33,46 @@ setwd("C:/Users/vik16/Documents/Baillet Lab Manuscript/Baillet Lab/Baillet Lab")
 
 transform_s600_colnames <- function(column_names) {
   transformed_names <- vector("character", length(column_names))
-  
   for (i in 1:length(column_names)) {
     original_name <- column_names[i]
-    
-    # Get the last character of the original name
-    #last_character <- substr(original_name, nchar(original_name), nchar(original_name))
-    
-    # Combine the last character and 'H_'
-    #suffix_name <- paste0(last_character, "H_")
-    
-    # Append the entire original name up until the last two characters
     final_name <- paste0('7Networks_', substr(original_name, 1, nchar(original_name) - 2))
-    
-    # Combine all parts to create the transformed name
     transformed_names[i] <- final_name
   }
-  
   return(transformed_names)
 }
 
 replace_outliers_with_max_non_outlier <- function(vector) {
-  q <- quantile(vector, probs = c(0.25, 0.75))
+  q <- quantile(vector, probs = c(0.25, 0.75), na.rm = TRUE)   # <<< added na.rm
   iqr <- q[2] - q[1]
-  
   lower_bound <- q[1] - 1.5 * iqr
   upper_bound <- q[2] + 1.5 * iqr
   
-  non_outliers <- vector[vector >= lower_bound & vector <= upper_bound]
-  max_non_outlier <- max(non_outliers)
+  non_outliers <- vector[!is.na(vector) & vector >= lower_bound & vector <= upper_bound]  # <<< NA-safe
+  if (length(non_outliers) == 0) return(vector)                                           # <<< guard
+  max_non_outlier <- max(non_outliers, na.rm = TRUE)                                      # <<< NA-safe
   
   vector[vector > upper_bound] <- max_non_outlier
-  
   return(vector)
 }
 
 processSchaeferInput <- function(path) {
-  data <- as.data.frame(read.csv(path))
+  # keep original read.csv but ensure names + strings; do NOT fetch atlas                      # <<< comment
+  data <- as.data.frame(read.csv(path, stringsAsFactors = FALSE, check.names = FALSE))        # <<< added args
+  
+  ## --- minimal column-name sanitization (prevents dplyr/ggplot errors) ---                  # <<< added block
+  bad <- which(is.na(names(data)) | names(data) == "")
+  if (length(bad) > 0) names(data)[bad] <- paste0("V", bad)
+  
   rgn_vec <- as.vector(data['region'])$region
   #Rename columns to align with ggseg Schaeffer 600 names
   data['region'] <- transform_s600_colnames(rgn_vec)
   
   mean_p_out_filt <- replace_outliers_with_max_non_outlier(as.numeric(as.matrix((data['mean_p']))))
   mean_i_out_filt <- replace_outliers_with_max_non_outlier(as.numeric(as.matrix((data['mean_i']))))
-
+  
   hemi_string <- c()
   for (i in c(1:length(rgn_vec))) {
     rgn <- rgn_vec[i]
-    #print(rgn)
     if(substr(rgn,nchar(rgn),nchar(rgn)) == 'L') {
       hemi_string <- c(hemi_string, 'left')
     } else {
@@ -94,13 +83,53 @@ processSchaeferInput <- function(path) {
   data <- cbind(data['region'], hemi_string,
                 mean_p_out_filt, mean_i_out_filt, data[,3:ncol(data)])
   
-  colnames(data) <- c('region', 'hemi', 'mean_p_out_filt', 'mean_i_out_filt',
-                      'mean_p', 'cmro2', 'cmrglu','mean_i') #,'var_i')
+  ## assign names to the FIRST 8 columns only, keep the rest untouched                         # <<< changed
+  new8 <- c('region', 'hemi', 'mean_p_out_filt', 'mean_i_out_filt',
+            'mean_p', 'cmro2', 'cmrglu','mean_i')
+  oldn <- colnames(data)
+  len <- min(length(oldn), length(new8))
+  oldn[1:len] <- new8[1:len]
+  colnames(data) <- oldn
   
   return(data)
-  
 }
 
+
+
+#Read in data
+s600_sec_p_rms <- processSchaeferInput('./rest_p_rms/sec/rms_2min_cent_sec_power_met_broad.csv')
+s600_pri_p_rms <- processSchaeferInput('./rest_p_rms/pri/rms_2min_cent_pri_power_met_broad.csv')
+
+rest_data_schaefer <- s600_pri_p_rms
+###FIX REGION NAMES###
+## --- minimal join hygiene + two name patches ---
+atlas_names <- unique(schaefer7_600$data$region)
+
+# ensure clean keys
+rest_data_schaefer$region <- trimws(rest_data_schaefer$region)
+rest_data_schaefer$hemi   <- tolower(trimws(rest_data_schaefer$hemi))
+
+# revert any accidental PFCl->PFCI changes (atlas uses PFCl)
+rest_data_schaefer$region <- sub("PFCI_", "PFCl_", rest_data_schaefer$region, fixed = TRUE)
+
+# fix the two labels that don't exist in your atlas build
+rest_data_schaefer$region <- sub("^7Networks_Default_PFCdPFCm_8$", "7Networks_Default_PFC_8",
+                                 rest_data_schaefer$region)
+rest_data_schaefer$region <- sub("^7Networks_Vis_45$", "7Networks_Vis_44",
+                                 rest_data_schaefer$region)
+
+# sanity check: any leftovers?
+setdiff(unique(rest_data_schaefer$region), atlas_names)
+
+#Start with p
+varname <- 'mean_p_out_filt'
+ggplot(rest_data_schaefer) +
+  geom_brain(atlas = schaefer7_600, mapping = aes(fill = !!sym(varname))) +
+  labs(fill='W') +
+  ggtitle('Total FEM-MNE Primary Dipole P (Thresholded)') +
+  theme_void()
+
+ggsave('./rms_2min_sec_p_out_filt.png')
 
 # Example input
 #schaefer7_sort <- sort(unique(schaefer7_600$data$region))
@@ -109,11 +138,11 @@ processSchaeferInput <- function(path) {
 
 #Read in data
 #schaefer7_600_names <- as.data.frame(read.csv('s600_ggseg_colnames.csv'))
-#s600_pri_p_rms <- processSchaeferInput('./rest_p_0s/sec/snap0s_2min_cent_sec_power_met_broad.csv')
-s600_sec_p_rms <- processSchaeferInput('./rest_p_rms/pri/rms_2min_cent_pri_power_met_broad.csv')
+s600_sec_p_rms <- processSchaeferInput('./rest_p_rms/sec/rms_2min_cent_sec_power_met_broad.csv')
+s600_pri_p_rms <- processSchaeferInput('./rest_p_rms/pri/rms_2min_cent_pri_power_met_broad.csv')
 #s600_100s_subavg <- processSchaeferInput('./rest_power_redo/omega_s600_power_met_broad.csv')
 
-rest_data_schaefer <- s600_sec_p_rms
+rest_data_schaefer <- s600_pri_p_rms
 
 #Start with p
 varname <- 'mean_p_out_filt'
@@ -122,10 +151,18 @@ ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!
 #ggsave('./rest_s600_total_p_out_filt.png')
 ggsave('./rms_2min_sec_p_out_filt.png')
 
+###create new variable for sec - pri
+rest_data_schaefer[,"pri_min_sec"] <- s600_pri_p_rms$mean_p_out_filt - s600_sec_p_rms$mean_p_out_filt
+varname <- 'pri_min_sec'
+ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
+  labs(fill='W') + ggtitle('Pri. - Sec. Dipole P (Thresholded)') + theme_void()
+#ggsave('./rest_s600_total_p_out_filt.png')
+ggsave('./rms_2min_pri_min_sec_out_filt.png')
+
 varname <- 'mean_p'
 ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
-  labs(fill='W') + ggtitle('FEM-MNE Primary P for 0s Primary Dipoles')
-ggsave('./rms_2min_total_p_sec.png')
+  labs(fill='W') + ggtitle('FEM-MNE Primary P, 120 s RMS')
+ggsave('./rms_2min_total_p_pri.png')
 
 varname <- 'mean_i_out_filt'
 ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
@@ -134,7 +171,7 @@ ggsave('./rms_2min_mean_i_out_filt.png')
 
 varname <- 'mean_i'
 ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
-  labs(fill='A.m') + ggtitle('FEM-MNE Primary Current Dipole At 0s')
+  labs(fill='A.m') + ggtitle('FEM-MNE Primary Current Dipole, 120 s RMS')
 ggsave('./rms_2min_mean_i.png')
 
 varname <- 'cmrglu'
@@ -153,7 +190,7 @@ varname <- 'mean_p_out_filt_z'
 rest_data_schaefer[varname] <- scale(rest_data_schaefer['mean_p_out_filt'])[1:600]
 max_abs_value <- max(abs(rest_data_schaefer[varname]))
 ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
-  labs(fill='Scaled P') + ggtitle('Mean Rest P (Thresholded)') + 
+  labs(fill='Scaled P') + ggtitle('Mean Rest P (Thresholded)') + theme_void() + 
   scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))
                        
 ggsave('./rest_s600_mean_p_out_filt_z.png')
@@ -162,7 +199,7 @@ varname <- 'mean_p_z'
 rest_data_schaefer[varname] <- scale(rest_data_schaefer['mean_p'])
 max_abs_value <- max(abs(rest_data_schaefer[varname]))
 ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
-  labs(fill='Scaled P') + ggtitle('Mean Rest P') + 
+  labs(fill='Scaled P') + ggtitle('Mean Rest P') +  theme_void() +
   scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))
 
 ggsave('./rest_s600_mean_p_z.png')
@@ -171,7 +208,7 @@ varname <- 'mean_i_out_filt_z'
 rest_data_schaefer[varname] <- scale(rest_data_schaefer['mean_i_out_filt'])[1:600]
 max_abs_value <- max(abs(rest_data_schaefer[varname]))
 ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
-  labs(fill='Scaled Thresholded I') + ggtitle('Mean Rest I (No Outliers)') + 
+  labs(fill='Scaled Thresholded I') + ggtitle('Mean Rest I (No Outliers)') + theme_void() + 
   scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))
 
 ggsave('./rest_s600_mean_i_no_out_z.png')
@@ -179,7 +216,7 @@ ggsave('./rest_s600_mean_i_no_out_z.png')
 varname <- 'mean_i_z'
 rest_data_schaefer[varname] <- scale(rest_data_schaefer['mean_i'])
 max_abs_value <- max(abs(rest_data_schaefer[varname]))
-ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
+ggplot(rest_data_schaefer) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) + theme_void() +
   labs(fill='Scaled I') + ggtitle('Mean Rest I') + 
   scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))
 
@@ -266,7 +303,7 @@ ggplot(vol_res_s600) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(va
 ggsave('./rest_s600_mean_r_out_filt.png')
 
 varname <- 'vol'
-ggplot(vol_res_s600) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
+ggplot(vol_res_s600) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname)))  +
   labs(fill='m^3') + ggtitle('Mean Cortical Column Volume')
 ggsave('./rest_s600_mean_v.png')
 
@@ -280,25 +317,43 @@ varname <- 'thick_z'
 vol_res_s600[varname] <- scale(vol_res_s600['thick'])[1:600]
 max_abs_value <- max(abs(vol_res_s600[varname]))
 ggplot(vol_res_s600) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
-  labs(fill='Scaled Cortical Thickness') + ggtitle('Mean Thickness (Standardized)') + 
-  scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))
+  labs(fill='Scaled Cortical Thickness') + ggtitle('Mean Thickness (Standardized)') + theme_void()+
+  scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value)) 
 
 ggsave('./rest_s600_mean_cort_thick_z.png')
+
+varname <- 'thick_no_out_z'
+vol_res_s600[varname] <- scale(vol_res_s600['thick_no_out'])[1:600]
+max_abs_value <- max(abs(vol_res_s600[varname]))
+ggplot(vol_res_s600) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
+  labs(fill='Scaled Cortical Thickness') + ggtitle('Mean thickness (Standardized)') + theme_void()+
+  scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))  
+  
+  ggsave('./rest_s600_mean_cort_thick_no_out_z.png')
 
 varname <- 'res_z'
 vol_res_s600[varname] <- scale(vol_res_s600['res'])[1:600]
 max_abs_value <- max(abs(vol_res_s600[varname]))
 ggplot(vol_res_s600) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
-  labs(fill='Scaled Resistance') + ggtitle('Mean Resistance (Standardized)') + 
+  labs(fill='Scaled Resistance') + ggtitle('Mean Resistance (Standardized)') + theme_void() +
   scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))
 
 ggsave('./rest_s600_mean_cort_r_z.png')
+
+varname <- 'res_no_out_z'
+vol_res_s600[varname] <- scale(vol_res_s600['res_no_out'])[1:600]
+max_abs_value <- max(abs(vol_res_s600[varname]))
+ggplot(vol_res_s600) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
+  labs(fill='Scaled Resistance') + ggtitle('Mean Resistance (Standardized)') + theme_void() +
+  scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))
+
+ggsave('./rest_s600_mean_cort_r_no_out_z.png')
 
 varname <- 'vol_z'
 vol_res_s600[varname] <- scale(vol_res_s600['vol'])[1:600]
 max_abs_value <- max(abs(vol_res_s600[varname]))
 ggplot(vol_res_s600) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
-  labs(fill='Scaled Column Volume') + ggtitle('Mean Column Volume (Standardized)') + 
+  labs(fill='Scaled Column Volume') + ggtitle('Mean Column Volume (Standardized)') + theme_void() + 
   scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))
 
 ggsave('./rest_s600_mean_cort_v_z.png')
@@ -307,10 +362,10 @@ varname <- 'sa_z'
 vol_res_s600[varname] <- scale(vol_res_s600['sa'])[1:600]
 max_abs_value <- max(abs(vol_res_s600[varname]))
 ggplot(vol_res_s600) + geom_brain(atlas=schaefer7_600, mapping=aes(fill=!!sym(varname))) +
-  labs(fill='Scaled Column Area') + ggtitle('Mean Column Area (Standardized)') + 
+  labs(fill='Scaled Column Area') + ggtitle('Mean Column Area (Standardized)') + theme_void() +
   scale_fill_gradientn(colours=c('blue','white','red'), limits=c(-max_abs_value, max_abs_value))
 
-ggsave('./rest_s600_mean_cort_v_z.png')
+ggsave('./rest_s600_mean_cort_sa_z.png')
 
 
 #Correlate power with 1/volume - all residual variation is due to currents
