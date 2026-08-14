@@ -1,0 +1,16 @@
+Paired t-test: orientation constraint effect on whole-brain summed primary dipole P (SnrFixed=3)
+n = 30 subjects
+unconstrained is 68.2% smaller than constrained on average
+
+
+	Paired t-test
+
+data:  p_wide$total_p_unconstrained and p_wide$total_p_constrained
+t = -5.2492, df = 29, p-value = 1.269e-05
+alternative hypothesis: true mean difference is not equal to 0
+95 percent confidence interval:
+ -2.123651e-08 -9.327886e-09
+sample estimates:
+mean difference 
+   -1.52822e-08 
+

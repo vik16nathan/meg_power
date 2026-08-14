@@ -1,0 +1,1 @@
+Code to calculate correlations between MEG-derived power dissipation and PET glucose/oxygen metabolism from _neuromaps_, as well as other biologically-defined metabolism metrics from Pourmajidian et al., 2025.

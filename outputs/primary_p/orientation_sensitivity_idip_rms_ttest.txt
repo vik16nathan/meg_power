@@ -1,0 +1,16 @@
+Paired t-test: orientation constraint effect on whole-brain summed RMS I_dip (SnrFixed=3)
+n = 30 subjects
+unconstrained is 41.3% smaller than constrained on average
+
+
+	Paired t-test
+
+data:  wide$total_i_unconstrained and wide$total_i_constrained
+t = -18.816, df = 29, p-value < 2.2e-16
+alternative hypothesis: true mean difference is not equal to 0
+95 percent confidence interval:
+ -5.799364e-07 -4.662203e-07
+sample estimates:
+mean difference 
+  -5.230784e-07 
+

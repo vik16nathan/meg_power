@@ -1,0 +1,14 @@
+*/outputs/
+outputs/mergemesh_fem_backup/
+outputs/secondary_p/vc_3layer/
+outputs/secondary_p/vsum_sec_curr/
+outputs/thickness_areas_omega_fem*.mat
+outputs/secondary_p/sub-0002_sep_postcentral_20nAm_3layer.npz
+outputs/secondary_p/sub-0002_postcentral_dipole.npz
+secondary_p/data_from_malte/
+*.log
+**/log/
+outputs/sub-*_vertices.csv
+outputs/primary_p/orientation_sensitivity_test_sub-0002_per_vertex.csv
+outputs/primary_p/orientation_sensitivity_test_sub-0002_summary.csv
+DEADJOE
