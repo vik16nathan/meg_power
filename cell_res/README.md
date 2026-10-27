@@ -1,1 +1,0 @@
-Scripts needed to calculate dendritic-derived resistances in parcels of the brain, based on data processed by Kasevich and Laberge et al. (estimated resistance of an apical dendrite), and Pak et al. (cell_props_filtered.csv). 

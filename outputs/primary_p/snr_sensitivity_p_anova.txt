@@ -1,0 +1,14 @@
+Repeated-measures ANOVA: SnrFixed effect on whole-brain summed primary dipole P
+n = 30 subjects, SnrFixed levels: 1, 3, 5
+
+
+Error: subject
+          Df    Sum Sq   Mean Sq F value Pr(>F)
+Residuals 29 5.339e-15 1.841e-16               
+
+Error: subject:snr
+          Df    Sum Sq   Mean Sq F value   Pr(>F)    
+snr        2 3.087e-15 1.544e-15   35.37 9.08e-11 ***
+Residuals 58 2.531e-15 4.360e-17                     
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
